@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:p="http://www.springframework.org/schema/p" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:cache="http://www.springframework.org/schema/cache"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"   
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+	http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.0.xsd http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.0.xsd
+	http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache-3.2.xsd
+	http://www.springframework.org/schema/mvc   
+           http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd 
+	">
+    
+    <!-- 说明：下面有的Bean配置提供了多种方案，请根据需要采用某一种（别忘了注释掉其他同类方案） -->
+
+	<!-- 自动扫描Spring注解配置 -->
+	<context:component-scan base-package="com.unicom.xtjc" />
+
+	<!-- 自动加载属性配置文件 -->
+	<context:property-placeholder location="classpath:jdbc.properties" />
+	
+	<!-- 使用ehcache缓存 -->  
+	<cache:annotation-driven />
+
+    <bean id="cacheManager" class="org.springframework.cache.ehcache.EhCacheCacheManager" p:cache-manager-ref="ehcacheManager"/>
+   	<bean id="ehcacheManager" class="org.springframework.cache.ehcache.EhCacheManagerFactoryBean" p:config-location="classpath:ehcache.xml"/>
+	
+	<!-- 配置数据源：方法一，使用C3P0方式（推荐） -->
+	
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource"
+		  destroy-method="close"
+		  >
+       <!-- 指定连接数据库的驱动 -->   
+  
+       <property name="driverClass" value="${jdbc.driverClassName}"/>   
+  
+       <!-- 指定连接数据库的URL -->   
+  
+       <property name="jdbcUrl" value="${jdbc.url}"/>   
+  
+       <!-- 指定连接数据库的用户名 -->   
+  
+       <property name="user" value="${jdbc.username}"/>   
+  
+       <!-- 指定连接数据库的密码 -->   
+  
+       <property name="password" value="${jdbc.password}"/>   
+  
+       <!-- 指定连接数据库连接池的最大连接数 -->   
+  
+       <property name="maxPoolSize" value="${c3p0.maxPoolSize}"/>   
+  
+       <!-- 指定连接数据库连接池的最小连接数 -->   
+  
+       <property name="minPoolSize" value="${c3p0.minPoolSize}"/>   
+  
+       <!-- 指定连接数据库连接池的初始化连接数 -->   
+  
+       <property name="initialPoolSize" value="${c3p0.initialPoolSize}"/>   
+  
+       <!-- 指定连接数据库连接池的连接的最大空闲时间 -->   
+  
+       <property name="maxIdleTime" value="${c3p0.maxIdleTime}"/>   
+  
+    </bean> 
+	<!-- 配置数据源：方法二，使用DBCP方式（不推荐） -->
+	<!-- 
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource" 
+		destroy-method="close" 
+		p:driverClassName="${jdbc.driverClassName}" 
+		p:url="${jdbc.url}" 
+		p:username="${jdbc.username}" 
+		p:password="${jdbc.password}" />
+	 -->
+
+	<!-- 配置数据源：方法三，使用JNDI方式 -->
+	<!-- 
+	<jee:jndi-lookup id="dataSource" jndi-name="${jndi.name}" />
+	 -->
+	 
+	
+	<!--
+		2. mybatis的SqlSession的工厂: SqlSessionFactoryBean dataSource:引用数据源
+
+		MyBatis定义数据源,同意加载配置
+	-->
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="dataSource"></property>
+		<property name="configLocation" value="classpath:mybatis-config.xml" /> 
+	</bean>
+	 <!--
+		3. mybatis自动扫描加载Sql映射文件/接口 : MapperScannerConfigurer sqlSessionFactory
+
+		basePackage:指定sql映射文件/接口所在的包（自动扫描）
+	-->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<!-- 如果扫描多个包，中间用半角逗号隔开-->  
+		<property name="basePackage" value="com.unicom.xtjc.mapper"></property>
+		<!--这里很重要-->
+		<property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"></property>
+	</bean>
+
+	<!-- 配置SQLSession模板   
+    <bean id="sqlSession" class="org.mybatis.spring.SqlSessionTemplate">  
+        <constructor-arg index="0" ref="sqlSessionFactory" />  
+    </bean>  -->
+	<!--
+		4. 事务管理 : DataSourceTransactionManager dataSource:引用上面定义的数据源
+	-->
+	<bean id="txManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+
+	<!-- 5. 使用声明式事务
+		 transaction-manager：引用上面定义的事务管理器
+		  配置声明式事务：方法一，在Service实现类或者public实现方法上使用注解@Transactional，则此类或方法就会启用事务机制 
+	 -->
+	<tx:annotation-driven transaction-manager="txManager" />
+	
+	<!-- 下面三个Bean的配置可有可无，但配置后用处更大，通常用于BaseDao类、其他Dao类或特殊工具类中 -->
+	<!--<bean id="hibernateTemplate" class="org.springframework.orm.hibernate4.HibernateTemplate"
+		p:sessionFactory-ref="sessionFactory" />
+		
+	<bean id="hibernateDaoSupport" class="org.springframework.orm.hibernate4.support.HibernateDaoSupport"
+		p:hibernateTemplate-ref="hibernateTemplate" abstract="true"/>
+		
+	<bean id="sessionFactoryUtils" class="org.springframework.orm.hibernate4.SessionFactoryUtils" abstract="true"/>
+	-->
+ 
+</beans>
